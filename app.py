@@ -67,45 +67,64 @@ m5.metric("OK 率", f"{ok_rate:.1f} %")
 if skipped > 0:
     st.caption(f"※ kwzweb に対応する施工通知が存在しない {skipped} 件は集計対象外")
 
-# ── グラフ ────────────────────────────────────────
-c1, c2 = st.columns(2)
+# ── 絞り込みフィルタ ──────────────────────────────
+st.divider()
+st.subheader("絞り込み")
+all_工事件名 = sorted(result_df["工事件名"].dropna().unique().tolist())
+selected_工事件名 = st.multiselect(
+    "工事件名で絞り込み（未選択 = すべて表示）",
+    options=all_工事件名,
+    default=[],
+    placeholder="工事件名を選んでください",
+)
+filtered_df = result_df[result_df["工事件名"].isin(selected_工事件名)] if selected_工事件名 else result_df
 
-with c1:
+f_ok = int((filtered_df["判定"] == "OK").sum())
+f_ng = len(filtered_df) - f_ok
+f_rate = f_ok / len(filtered_df) * 100 if len(filtered_df) > 0 else 0.0
+
+# ── グラフ ────────────────────────────────────────
+st.divider()
+
+# OK/NG 割合（小さめ、左寄せ）
+col_pie, _ = st.columns([1, 2])
+with col_pie:
     fig_pie = px.pie(
-        values=[ok, ng],
+        values=[f_ok, f_ng],
         names=["OK", "NG"],
         color=["OK", "NG"],
         color_discrete_map={"OK": "#00CC96", "NG": "#EF553B"},
-        title="OK / NG 割合",
+        title=f"OK / NG 割合（{f_ok:,} / {f_ng:,} 件）",
         hole=0.45,
     )
     fig_pie.update_traces(textinfo="percent+label")
     st.plotly_chart(fig_pie, use_container_width=True)
 
-with c2:
-    area_summary = (
-        result_df.groupby(["箇所名", "工事件名", "判定"])
-        .size()
-        .reset_index(name="件数")
-    )
-    area_summary["センター／工事件名"] = area_summary["箇所名"] + "\n" + area_summary["工事件名"]
-    fig_bar = px.bar(
-        area_summary,
-        x="センター／工事件名",
-        y="件数",
-        color="判定",
-        color_discrete_map={"OK": "#00CC96", "NG": "#EF553B"},
-        title="箇所・工事件名別 OK / NG 件数",
-        barmode="stack",
-        text_auto=True,
-        hover_data={"箇所名": True, "工事件名": True, "センター／工事件名": False},
-    )
-    fig_bar.update_xaxes(tickangle=45)
-    st.plotly_chart(fig_bar, use_container_width=True)
+# 箇所・工事件名別グラフ（全幅・大きめ）
+area_summary = (
+    filtered_df.groupby(["箇所名", "工事件名", "判定"])
+    .size()
+    .reset_index(name="件数")
+)
+area_summary["センター／工事件名"] = area_summary["箇所名"] + " / " + area_summary["工事件名"]
+fig_bar = px.bar(
+    area_summary,
+    x="センター／工事件名",
+    y="件数",
+    color="判定",
+    color_discrete_map={"OK": "#00CC96", "NG": "#EF553B"},
+    title="箇所・工事件名別 OK / NG 件数",
+    barmode="stack",
+    text_auto=True,
+    hover_data={"箇所名": True, "工事件名": True, "センター／工事件名": False},
+    height=550,
+)
+fig_bar.update_xaxes(tickangle=45)
+st.plotly_chart(fig_bar, use_container_width=True)
 
 # 施行月別グラフ
-if "施行日" in result_df.columns:
-    monthly = result_df.copy()
+if "施行日" in filtered_df.columns:
+    monthly = filtered_df.copy()
     monthly["施行年月"] = pd.to_datetime(monthly["施行日"]).dt.to_period("M").astype(str)
     monthly_summary = (
         monthly.groupby(["施行年月", "判定"])
@@ -130,7 +149,7 @@ st.divider()
 st.subheader("詳細一覧")
 
 show_ng_only = st.checkbox("NG のみ表示", value=False)
-display_df = result_df[result_df["判定"] != "OK"].copy() if show_ng_only else result_df.copy()
+display_df = filtered_df[filtered_df["判定"] != "OK"].copy() if show_ng_only else filtered_df.copy()
 
 for col in ["施行日", "期日"]:
     display_df[col] = pd.to_datetime(display_df[col]).dt.strftime("%Y/%m/%d")
@@ -153,7 +172,7 @@ st.caption(f"表示件数: {len(display_df):,} 件")
 st.divider()
 
 # ── Excel ダウンロード ────────────────────────────
-excel_bytes = to_excel(result_df)
+excel_bytes = to_excel(filtered_df)
 st.download_button(
     label="Excel ダウンロード（集計・全件・NG一覧）",
     data=excel_bytes,
