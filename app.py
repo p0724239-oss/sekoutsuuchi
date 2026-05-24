@@ -71,10 +71,43 @@ if skipped > 0:
 st.divider()
 st.subheader("絞り込み")
 all_工事件名 = sorted(result_df["工事件名"].dropna().unique().tolist())
+
+if "sel_kojimei" not in st.session_state:
+    st.session_state["sel_kojimei"] = []
+
+# 箇所名ごとにまとめて選択
+all_箇所名 = sorted(result_df["箇所名"].dropna().unique().tolist())
+箇所名_to_工事件名 = {
+    k: sorted(result_df[result_df["箇所名"] == k]["工事件名"].dropna().unique().tolist())
+    for k in all_箇所名
+}
+
+btn_all, btn_none, *_ = st.columns([1, 1, 4])
+if btn_all.button("すべて選択"):
+    st.session_state["sel_kojimei"] = all_工事件名[:]
+    st.rerun()
+if btn_none.button("すべて解除"):
+    st.session_state["sel_kojimei"] = []
+    st.rerun()
+
+selected_箇所名 = st.selectbox(
+    "箇所名でまとめて選択",
+    options=["（個別選択）"] + all_箇所名,
+    index=0,
+    key="sel_kakami",
+)
+if selected_箇所名 != "（個別選択）":
+    targets = 箇所名_to_工事件名[selected_箇所名]
+    current = st.session_state["sel_kojimei"]
+    merged = sorted(set(current) | set(targets))
+    if merged != current:
+        st.session_state["sel_kojimei"] = merged
+        st.rerun()
+
 selected_工事件名 = st.multiselect(
     "工事件名で絞り込み（未選択 = すべて表示）",
     options=all_工事件名,
-    default=[],
+    key="sel_kojimei",
     placeholder="工事件名を選んでください",
 )
 filtered_df = result_df[result_df["工事件名"].isin(selected_工事件名)] if selected_工事件名 else result_df
