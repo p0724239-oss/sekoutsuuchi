@@ -84,21 +84,23 @@ with c1:
 
 with c2:
     area_summary = (
-        result_df.groupby(["箇所名", "判定"])
+        result_df.groupby(["箇所名", "工事件名", "判定"])
         .size()
         .reset_index(name="件数")
     )
+    area_summary["センター／工事件名"] = area_summary["箇所名"] + "\n" + area_summary["工事件名"]
     fig_bar = px.bar(
         area_summary,
-        x="箇所名",
+        x="センター／工事件名",
         y="件数",
         color="判定",
         color_discrete_map={"OK": "#00CC96", "NG": "#EF553B"},
-        title="箇所別 OK / NG 件数",
+        title="箇所・工事件名別 OK / NG 件数",
         barmode="stack",
         text_auto=True,
+        hover_data={"箇所名": True, "工事件名": True, "センター／工事件名": False},
     )
-    fig_bar.update_xaxes(tickangle=30)
+    fig_bar.update_xaxes(tickangle=45)
     st.plotly_chart(fig_bar, use_container_width=True)
 
 # 施行月別グラフ
